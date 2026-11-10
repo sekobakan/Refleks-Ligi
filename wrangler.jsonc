@@ -1,1 +1,8 @@
-{ "name": "refleks-ligi", "compatibility_date": "2026-09-01", "workers_dev": true, "assets": { "directory": "./public" } }
+{
+  "name": "refleks-ligi",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "refleks-ligi", "database_id": "f820085c-0c33-468f-aa1d-3f9fba088a24" }]
+}
