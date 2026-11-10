@@ -190,7 +190,7 @@ const THEMES=[{id:'neo',n:['Neon','Neon'],p:0,c:['#2a1a7a','#5b2cff','#ff3d81','
 let own=store.get('own',['neo']),theme=store.get('theme','neo'),CC=store.get('cc',''),lastRank='';
 const thm=()=>THEMES.find(t=>t.id===theme)||THEMES[0];function applyTheme(){thm().c.forEach((c,i)=>document.documentElement.style.setProperty('--s'+i,c))}applyTheme();
 const flag=c=>c&&c.length===2?String.fromCodePoint(...[...c.toUpperCase()].map(x=>127397+x.charCodeAt(0))):'';
-const act=a=>a.filter(c=>(c.d||0)<dkey);let CARDS=act(store.get('cards',[]));fetch('/cards.json',{cache:'no-cache'}).then(r=>r.json()).then(j=>{if(j.cards&&j.cards.length){store.set('cards',j.cards);CARDS=act(j.cards)}}).catch(()=>{});
+const act=a=>a.filter(c=>(c.d||0)<dkey);let CARDS=act(store.get('cards',[]));fetch('/api/cards').then(r=>r.json()).then(j=>{if(j.cards&&j.cards.length){store.set('cards',j.cards);CARDS=act(j.cards)}}).catch(()=>{});
 const L=TR?0:1,ctext=a=>{a=String(a);return a.includes('|')?a.split('|')[L]:a};
 const QP=new URLSearchParams(location.search);let CH=null;{const c=parseInt(QP.get('c')),d=parseInt(QP.get('d'));if(c>0&&c<=8000)CH={score:c,nick:(QP.get('n')||'').replace(/[^\p{L}\p{N} _.-]/gu,'').trim().slice(0,14)||'?',today:d===dkey}}
 const tierOf=sc=>sc>=500?3:sc>=300?2:sc>=150?1:0;

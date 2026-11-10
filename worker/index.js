@@ -9,6 +9,8 @@ const cleanNick = (n) => (String(n || "").replace(/[^\p{L}\p{N} _.-]/gu, "").tri
 const PID = /^[a-f0-9-]{16,40}$/;
 const tier = (rank, total) => { const p = (rank - 1) / Math.max(1, total); return p < 0.1 ? 3 : p < 0.3 ? 2 : p < 0.6 ? 1 : 0; };
 const country = (req) => { const c = (req.cf && req.cf.country) || ""; return /^[A-Z]{2}$/.test(c) && c !== "XX" && c !== "T1" ? c : ""; };
+const CATS = ["geo", "sci", "nature", "math", "history", "art", "sport", "tech"];
+const norm = (x) => String(x).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
 const maxScore = (ok) => { let s = 0; for (let i = 0; i < ok; i++) s += 10 * Math.min(5, 1 + Math.floor(i / 3)); return s; };
 
 async function sign(env, msg) {
@@ -80,6 +82,35 @@ export default {
           : (await env.DB.prepare(`SELECT MAX(nick) nick, SUM(score) score, pid, MAX(cc) cc FROM scores WHERE week=?${w} GROUP BY pid ORDER BY score DESC LIMIT 50`).bind(week, ...args).all()).results;
         const me = PID.test(pid) ? await scoped(env.DB, mode, mode === "day" ? day : week, pid, cc) : null;
         return J({ mode, day, cc: myCc, top: rows.map((r) => ({ nick: r.nick, score: r.score, cc: r.cc || "", me: r.pid === pid })), me });
+      }
+      if (u.pathname === "/api/cards" && req.method === "GET") {
+        const rows = (await env.DB.prepare("SELECT c, d, q_tr, q_en, a FROM cards ORDER BY id").all()).results;
+        return new Response(JSON.stringify({ v: 3, cards: rows.map((r) => ({ c: r.c, d: r.d, q: [r.q_tr, r.q_en], a: JSON.parse(r.a) })) }),
+          { headers: { "content-type": "application/json", "cache-control": "public, max-age=300" } });
+      }
+      // Yeni kartları denetler (biçim, uzunluk, tekrar) ve geçerliyse eklemek için SQL döndürür. Kendisi yazmaz;
+      // ekleme, Cloudflare yetkisiyle `wrangler d1 execute` ile yapılır (günlük rutin).
+      if (u.pathname === "/api/cards/check" && req.method === "POST") {
+        const b = await req.json().catch(() => null), list = b && Array.isArray(b.cards) ? b.cards.slice(0, 30) : null;
+        if (!list || !list.length) return J({ error: "bad_request" }, 400);
+        const have = (await env.DB.prepare("SELECT k_tr, k_en FROM cards").all()).results, seen = new Set(have.flatMap((r) => [r.k_tr, r.k_en]));
+        const errors = [], sql = [], esc = (x) => "'" + String(x).replace(/'/g, "''") + "'", d = today();
+        list.forEach((c, i) => {
+          const e = (m) => errors.push(`${i + 1}. kart (${String((c && c.q && c.q[0]) || "?").slice(0, 40)}): ${m}`), n0 = errors.length;
+          if (!c || !CATS.includes(c.c)) return e("kategori geçersiz (" + CATS.join(", ") + ")");
+          if (!Array.isArray(c.q) || c.q.length !== 2 || !c.q.every((x) => typeof x === "string" && x.length >= 8 && x.length <= 52 && x.endsWith("?"))) return e("soru iki dilde, 8-52 karakter, ? ile bitmeli");
+          if (!Array.isArray(c.a) || c.a.length !== 4 || !c.a.every((x) => typeof x === "string" && x && x.split("|").length <= 2)) return e("4 metin cevap olmalı (iki dil için Türkçe|English)");
+          for (const l of [0, 1]) {
+            const o = c.a.map((x) => (x.includes("|") ? x.split("|")[l] : x).trim());
+            if (o.some((x) => !x || x.length > 16)) e("cevap en çok 16 karakter");
+            if (new Set(o.map(norm)).size !== 4) e("cevaplar birbirinden farklı olmalı");
+          }
+          const k = c.q.map(norm);
+          if (k.some((x) => seen.has(x))) e("bu soru zaten var");
+          if (errors.length === n0) { k.forEach((x) => seen.add(x)); sql.push(`INSERT INTO cards (c,d,q_tr,q_en,a,k_tr,k_en) VALUES (${esc(c.c)},${d},${esc(c.q[0])},${esc(c.q[1])},${esc(JSON.stringify(c.a))},${esc(k[0])},${esc(k[1])});`); }
+        });
+        const counts = (await env.DB.prepare("SELECT c, COUNT(*) n FROM cards GROUP BY c").all()).results;
+        return J({ ok: !errors.length, errors, total: have.length, counts, sql: errors.length ? "" : sql.join("\n") });
       }
       if (u.pathname.startsWith("/api/")) return J({ error: "not_found" }, 404);
     } catch (e) {
