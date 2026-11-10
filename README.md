@@ -14,3 +14,6 @@ Kartlar yalnızca kesin, tartışmasız bilgilerden seçilir (sıralamaya puan o
 
 ## Tur doğrulaması
 `/api/start` imzalı bir tur anahtarı verir (`RUN_KEY` gizli anahtarı, `wrangler secret put RUN_KEY`). Skor, anahtar + geçen süre + doğru/yanlış sayısı tutarlıysa kabul edilir.
+
+Kategoriler (`c`): geo, sci, nature, math, history, art, sport, tech. `d` = kartın eklendiği UTC gün numarası; kart ertesi gün oyunda görünür.
+Denetim: `python3 tools/cards_check.py`. Günlük rutin her gün 10 yeni kart ekler (denetim + `npx wrangler@4 deploy`).
